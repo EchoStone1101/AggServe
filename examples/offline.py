@@ -15,10 +15,9 @@ MODEL = "facebook/opt-125m"
 parser.add_argument('--model', type=str, help='The model to use', default=MODEL)
 args = parser.parse_args()
 
-mps_dir = './mps'
+mps_dir = '~/xyx/DistServe/examples/mps'
 os.environ["CUDA_MPS_PIPE_DIRECTORY"] = f"{mps_dir}/nvidia-mps"
 os.environ["CUDA_MPS_LOG_DIRECTORY"] = f"{mps_dir}/nvidia-log"
-print(os.environ)
 # Sample prompts.
 prompts = [
     "Life blooms like a flower. Far away or by the road. Waiting",
@@ -43,18 +42,18 @@ llm = OfflineLLM(
         context=ParallelConfig(
             tensor_parallel_size=1,
             pipeline_parallel_size=1,
-            mps_percentage=0.6,
+            mps_percentage=0.8,
         ),
         decoding=ParallelConfig(
             tensor_parallel_size=1,
             pipeline_parallel_size=1,
-            mps_percentage=0.4,
+            mps_percentage=0.2,
         )
     ),
     cache_config=CacheConfig(
         block_size=16,
         max_num_blocks_per_req=1024,
-        gpu_memory_utilization=0.9,
+        gpu_memory_utilization=0.45,
         cpu_swap_space=1.0
     ),
     context_sched_config=ContextStageSchedConfig(

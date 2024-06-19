@@ -22,7 +22,7 @@ from distserve.downloader import download_and_convert_weights
 logger = init_logger(__name__)
 
 
-@ray.remote(num_cpus=0, num_gpus=1)
+@ray.remote(num_cpus=0, num_gpus=0.5)
 class ParaWorker:
     """A worker class that executes (a partition of) the model on a GPU.
 
@@ -62,7 +62,7 @@ class ParaWorker:
 
             # First make torch allocate its own contex
             _ = torch.zeros((1,1), device="cuda")
-
+            
             # Then replace it with our own
             from cuda import cuda
             mps_precentage = int(100 * self.mps_precentage)
@@ -71,7 +71,6 @@ class ParaWorker:
             assert mps_precentage >= 0 and mps_precentage <= 100
             assert os.getenv("CUDA_MPS_ENABLE_PER_CTX_DEVICE_MULTIPROCESSOR_PARTITIONING")
             os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = str(mps_precentage)
-
             _, prev_ctx = cuda.cuCtxGetCurrent()
             
             _, device = cuda.cuCtxGetDevice()
