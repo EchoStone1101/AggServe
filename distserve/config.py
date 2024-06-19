@@ -37,6 +37,7 @@ class ParallelConfig:
         tensor_parallel_rank: rank in the tensor parallel group.
         pipeline_parallel_size: number of pipeline parallel groups.
         pipeline_parallel_rank: rank in the pipeline parallel group.
+        mps_percentage: MPS percentage of workers.
     """
 
     def __init__(
@@ -45,11 +46,13 @@ class ParallelConfig:
         tensor_parallel_rank: int = 0,
         pipeline_parallel_size: int = 1,
         pipeline_parallel_rank: int = 0,
+        mps_percentage: Optional[float] = None, # TODO: list of floats for more workers
     ) -> None:
         self.tensor_parallel_size = tensor_parallel_size
         self.tensor_parallel_rank = tensor_parallel_rank
         self.pipeline_parallel_size = pipeline_parallel_size
         self.pipeline_parallel_rank = pipeline_parallel_rank
+        self.mps_percentage = mps_percentage
 
         self.world_size = pipeline_parallel_size * tensor_parallel_size
         self.use_parallel = self.world_size > 1

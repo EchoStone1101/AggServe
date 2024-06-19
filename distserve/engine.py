@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple, Dict, AsyncGenerator
 import asyncio
 import math
 import argparse
+import os
 
 import ray
 from ray.util.placement_group import PlacementGroup
@@ -106,6 +107,11 @@ class LLMEngine:
         self.bridge_queue = asyncio.Queue()
         
         logger.info("Initializing placement group")
+        # These environment variables are inherited by the raylet processes,
+        # and then passed to ray worker processes. They enable NVIDIA MPS
+        # for the worker processes at a per-thread-context level.
+        os.environ["CUDA_MPS_ENABLE_PER_CTX_DEVICE_MULTIPROCESSOR_PARTITIONING"] = "1"
+        os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = "100"
         placement_groups = self._init_placement_groups()
         
         logger.info("Initializing context stage LLM engine")

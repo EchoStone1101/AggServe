@@ -8,11 +8,17 @@ from distserve.config import (
     ContextStageSchedConfig,
     DecodingStageSchedConfig
 )
-
+import os
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, help='The model to use', default='meta-llama/Llama-2-7b-hf')
+# MODEL = "/users/xyx/.cache/huggingface/hub/models--huggyllama--llama-7b/snapshots/8416d3fefb0cb3ff5775a7b13c1692d10ff1aa16/"
+MODEL = "facebook/opt-125m"
+parser.add_argument('--model', type=str, help='The model to use', default=MODEL)
 args = parser.parse_args()
 
+mps_dir = './mps'
+os.environ["CUDA_MPS_PIPE_DIRECTORY"] = f"{mps_dir}/nvidia-mps"
+os.environ["CUDA_MPS_LOG_DIRECTORY"] = f"{mps_dir}/nvidia-log"
+print(os.environ)
 # Sample prompts.
 prompts = [
     "Life blooms like a flower. Far away or by the road. Waiting",
@@ -24,7 +30,7 @@ prompts = [
 
 # Create a sampling params object.
 sampling_params = SamplingParams(
-    temperature=0.8, top_p=0.95, max_tokens=64, stop=["\n"]
+    temperature=0.8, top_p=0.95, max_tokens=4, stop=["\n"]
 )
 
 # Create an LLM for offline inference.
@@ -36,11 +42,13 @@ llm = OfflineLLM(
     disagg_parallel_config=DisaggParallelConfig(
         context=ParallelConfig(
             tensor_parallel_size=1,
-            pipeline_parallel_size=1
+            pipeline_parallel_size=1,
+            mps_percentage=0.6,
         ),
         decoding=ParallelConfig(
             tensor_parallel_size=1,
-            pipeline_parallel_size=1
+            pipeline_parallel_size=1,
+            mps_percentage=0.4,
         )
     ),
     cache_config=CacheConfig(

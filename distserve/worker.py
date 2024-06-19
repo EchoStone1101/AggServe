@@ -5,6 +5,7 @@ import copy
 import time
 from typing import List, Tuple, Optional
 import socket
+import os
 
 import ray
 import torch
@@ -51,9 +52,34 @@ class ParaWorker:
         self.tensor_parallel_id = tensor_parallel_id
         self.pipeline_parallel_id = pipeline_parallel_id
         self.gpu_id = ray.get_gpu_ids()[0]
-        
+        self.mps_precentage = parallel_config.mps_percentage
+
         self.device = torch.device(f"cuda:0")
         torch.cuda.set_device(self.device)
+
+        # Manage CUDA contexts ourselves, with MPS enabled.
+        if self.mps_precentage is not None:
+
+            # First make torch allocate its own contex
+            _ = torch.zeros((1,1), device="cuda")
+
+            # Then replace it with our own
+            from cuda import cuda
+            mps_precentage = int(100 * self.mps_precentage)
+            logger.info(f"Worker {worker_id}@{stage} setting MPS percentage to {mps_precentage}")
+
+            assert mps_precentage >= 0 and mps_precentage <= 100
+            assert os.getenv("CUDA_MPS_ENABLE_PER_CTX_DEVICE_MULTIPROCESSOR_PARTITIONING")
+            os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = str(mps_precentage)
+
+            _, prev_ctx = cuda.cuCtxGetCurrent()
+            
+            _, device = cuda.cuCtxGetDevice()
+            flag = 1
+            _, cuda_context = cuda.cuCtxCreate(flag, device)
+            _ = cuda.cuCtxPushCurrent(cuda_context) 
+            _, cur_ctx = cuda.cuCtxGetCurrent()
+            logger.info(f"Worker {worker_id}@{stage} switching CUDA context from {prev_ctx} to {cur_ctx}")
         
         # K/V cache on GPU
         self.k_cache = None
@@ -80,6 +106,10 @@ class ParaWorker:
         If ready is called, the actor is ready.
         """
         logger.info(f"Worker {self.stage}.#{self.worker_id} created on host {socket.gethostname()} and gpu #{self.gpu_id}")
+        if value := os.getenv("CUDA_MPS_ENABLE_PER_CTX_DEVICE_MULTIPROCESSOR_PARTITIONING", None):
+            logger.info(f"Worker {self.stage}.#{self.worker_id} has ENV={value}")
+        else:
+            logger.info(f"Worker {self.stage}.#{self.worker_id} does not see ENV")
         pass
 
     def init_model(self):
