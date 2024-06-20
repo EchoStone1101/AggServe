@@ -110,6 +110,10 @@ class LLMEngine:
         # These environment variables are inherited by the raylet processes,
         # and then passed to ray worker processes. They enable NVIDIA MPS
         # for the worker processes at a per-thread-context level.
+        
+        mps_dir = '/users/xyx/xyx/DistServe/examples/mps'
+        os.environ["CUDA_MPS_PIPE_DIRECTORY"] = f"{mps_dir}/nvidia-mps"
+        os.environ["CUDA_MPS_LOG_DIRECTORY"] = f"{mps_dir}/nvidia-log"
         os.environ["CUDA_MPS_ENABLE_PER_CTX_DEVICE_MULTIPROCESSOR_PARTITIONING"] = "1"
         os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = "100"
         placement_groups = self._init_placement_groups()

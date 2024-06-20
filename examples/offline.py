@@ -15,7 +15,7 @@ MODEL = "facebook/opt-125m"
 parser.add_argument('--model', type=str, help='The model to use', default=MODEL)
 args = parser.parse_args()
 
-mps_dir = '~/xyx/DistServe/examples/mps'
+mps_dir = './mps'
 os.environ["CUDA_MPS_PIPE_DIRECTORY"] = f"{mps_dir}/nvidia-mps"
 os.environ["CUDA_MPS_LOG_DIRECTORY"] = f"{mps_dir}/nvidia-log"
 # Sample prompts.
