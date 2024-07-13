@@ -97,6 +97,7 @@ class LLMEngine:
         self.context_sched_config = context_sched_config
         self.decoding_sched_config = decoding_sched_config
 
+        logger.info(f"GPU memory utilization: {self.cache_config.gpu_memory_utilization}")
         self.request_counter = Counter()
         self.tokenizer = get_tokenizer(
             model_config.tokenizer,
@@ -111,12 +112,19 @@ class LLMEngine:
         # and then passed to ray worker processes. They enable NVIDIA MPS
         # for the worker processes at a per-thread-context level.
         
-        mps_dir = '/users/xyx/xyx/DistServe/examples/mps'
-        os.environ["CUDA_MPS_PIPE_DIRECTORY"] = f"{mps_dir}/nvidia-mps"
-        os.environ["CUDA_MPS_LOG_DIRECTORY"] = f"{mps_dir}/nvidia-log"
-        os.environ["CUDA_MPS_ENABLE_PER_CTX_DEVICE_MULTIPROCESSOR_PARTITIONING"] = "1"
-        os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = "100"
-        placement_groups = self._init_placement_groups()
+        logger.info(disagg_parallel_config.context.mps_percentage)
+        logger.info(disagg_parallel_config.decoding.mps_percentage)
+        if self.disagg_parallel_config.context.mps_percentage is not None and self.disagg_parallel_config.decoding.mps_percentage is not None:
+            logger.info(f"init mps: context phase {disagg_parallel_config.context.mps_percentage}, decode phase {disagg_parallel_config.decoding.mps_percentage}")
+            mps_dir = '/users/xyx/AggServe/exp/'
+            os.environ["CUDA_MPS_PIPE_DIRECTORY"] = f"{mps_dir}/nvidia-mps"
+            os.environ["CUDA_MPS_LOG_DIRECTORY"] = f"{mps_dir}/nvidia-log"
+            os.environ["CUDA_MPS_ENABLE_PER_CTX_DEVICE_MULTIPROCESSOR_PARTITIONING"] = "1"
+            os.environ["CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"] = "100"
+            placement_groups = self._init_mps_placement_groups()
+        # logger.info(f"environ: {os.environ}")
+        else:
+            placement_groups = self._init_placement_groups()
         
         logger.info("Initializing context stage LLM engine")
         self.context_engine = ContextStageLLMEngine(
@@ -214,10 +222,54 @@ class LLMEngine:
         
         return placement_groups
         
+    def _init_mps_placement_groups(self) -> Optional[List[PlacementGroup]]:
+        """
+        Create placement groups for all engines and all workers
+        
+        Currently we force the same layer of the context & decoding stage to be executed
+        on the same node (we call this "aligned"). This simplifies k/v cache migration.
+        """
+        context_pp = self.disagg_parallel_config.context.pipeline_parallel_size
+        context_tp = self.disagg_parallel_config.context.tensor_parallel_size
+        decoding_pp = self.disagg_parallel_config.decoding.pipeline_parallel_size
+        decoding_tp = self.disagg_parallel_config.decoding.tensor_parallel_size
+        
+        # assert context_pp * context_tp == decoding_pp * decoding_tp
+        
+        # Each placement group is responsible for `layer_per_placement_group` layers
+        layer_per_context_pp = self.model_config.get_num_layers(self.disagg_parallel_config.context)
+        layer_per_decoding_pp = self.model_config.get_num_layers(self.disagg_parallel_config.decoding)
+        layer_per_placement_group = math.lcm(layer_per_context_pp, layer_per_decoding_pp)
+        
+        # Each placement group contains `workers_per_placement_group` workers
+        workers_per_placement_group = \
+            layer_per_placement_group // layer_per_context_pp * context_tp \
+            + layer_per_placement_group // layer_per_decoding_pp * decoding_tp
+        
+        # There should be `num_placement_groups` placement groups in total
+        num_placement_groups = self.model_config.get_num_layers() // layer_per_placement_group
+        assert num_placement_groups * workers_per_placement_group == \
+            context_pp * context_tp + decoding_pp * decoding_tp
+        
+        # Create placement groups
+        placement_groups = []
+        for i in range(num_placement_groups):
+            placement_group = ray.util.placement_group(
+                [ { "GPU": self.disagg_parallel_config.context.worker_num_gpus }, { "GPU": self.disagg_parallel_config.decoding.worker_num_gpus } ] * ((workers_per_placement_group + 1) // 2),
+                strategy="STRICT_PACK",
+            )
+            ray.get(placement_group.ready(), timeout=1000)
+            placement_groups.append(placement_group)
+        
+        return placement_groups
+    
     async def initialize(self):
         await asyncio.gather(
+            
             self.context_engine.initialize(),
             self.decoding_engine.initialize()
+            # self.decoding_engine.initialize(),
+            # self.context_engine.initialize()
         )
         await self.decoding_engine.register_kvcache_mem_handles(
             self.context_engine.parallel_config,
@@ -319,6 +371,8 @@ def add_engine_cli_args(parser: argparse.ArgumentParser):
     parser.add_argument("--trust-remote-code", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--use-dummy-weights", action="store_true")
+    parser.add_argument("--mps-percentage", type=float, default=None)
+    parser.add_argument("--worker-num-gpus", type=float, default=None)
     
     parser.add_argument("--context-pipeline-parallel-size", type=int, default=1)
     parser.add_argument("--context-tensor-parallel-size", type=int, default=1)

@@ -26,6 +26,7 @@ def read_dataset(
             dataset = json.load(f)
         
         result: List[TestRequest] = []
+        cnt = 0
         for data in tqdm.tqdm(dataset):
             num_conversations = len(data["conversations"])
             
@@ -52,7 +53,12 @@ def read_dataset(
             if prompt_len + output_len >= 2048:
                 # Prune too long sequences. (It exceeded max_positional_embedding)
                 continue
+            if abs(prompt_len - 1024) > 20 or abs(output_len - 96) > 4:
+                # Prune too long sequences.
+                continue
             
+            cnt += 1
+            print(f"{cnt}-th req with {prompt_len} length and {output_len} output length")
             result.append(TestRequest(prompt, prompt_len, output_len))
         
         # return Dataset(f"sharegpt-mt-{args.sharegpt_min_turns}-mipt-{args.sharegpt_min_prompt_turns}-mxpt-{args.sharegpt_max_prompt_turns}", result)
@@ -86,6 +92,8 @@ def read_dataset(
             if prompt_len > 1024 or prompt_len + output_len > 2048:
                 # Prune too long sequences.
                 continue
+            
+            
             filtered_dataset.append(TestRequest(prompt, prompt_len, output_len))
 
         return Dataset("alpaca", filtered_dataset)

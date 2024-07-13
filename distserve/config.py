@@ -47,12 +47,14 @@ class ParallelConfig:
         pipeline_parallel_size: int = 1,
         pipeline_parallel_rank: int = 0,
         mps_percentage: Optional[float] = None, # TODO: list of floats for more workers
+        worker_num_gpus: Optional[float] = None,
     ) -> None:
         self.tensor_parallel_size = tensor_parallel_size
         self.tensor_parallel_rank = tensor_parallel_rank
         self.pipeline_parallel_size = pipeline_parallel_size
         self.pipeline_parallel_rank = pipeline_parallel_rank
         self.mps_percentage = mps_percentage
+        self.worker_num_gpus = worker_num_gpus if worker_num_gpus is not None else mps_percentage
 
         self.world_size = pipeline_parallel_size * tensor_parallel_size
         self.use_parallel = self.world_size > 1

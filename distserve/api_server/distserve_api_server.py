@@ -129,8 +129,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     set_random_seed(args.seed)
-    ray.init()
-    
     engine = AsyncLLM.from_engine_args(args)
 
     uvicorn_config = uvicorn.Config(

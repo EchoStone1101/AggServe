@@ -115,7 +115,6 @@ class AsyncLLM:
             context_sched_config,
             decoding_sched_config
         )
-        
         asyncio.run(self.engine.initialize())
     
     def from_engine_args(
@@ -132,11 +131,15 @@ class AsyncLLM:
             disagg_parallel_config=DisaggParallelConfig(
                 context=ParallelConfig(
                     tensor_parallel_size=args.context_tensor_parallel_size,
-                    pipeline_parallel_size=args.context_pipeline_parallel_size
+                    pipeline_parallel_size=args.context_pipeline_parallel_size,
+                    mps_percentage=args.mps_percentage,
+                    worker_num_gpus= args.worker_num_gpus if args.worker_num_gpus else None
                 ),
                 decoding=ParallelConfig(
                     tensor_parallel_size=args.decoding_tensor_parallel_size,
-                    pipeline_parallel_size=args.decoding_pipeline_parallel_size
+                    pipeline_parallel_size=args.decoding_pipeline_parallel_size,
+                    mps_percentage= 1 - args.mps_percentage if args.mps_percentage else None,
+                    worker_num_gpus= args.worker_num_gpus if args.worker_num_gpus else None
                 )
             ),
             cache_config=CacheConfig(

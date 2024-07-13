@@ -23,7 +23,8 @@ MODEL_TO_PARALLEL_PARAMS = {
     "facebook/opt-6.7b": {
         "vllm": 1,
         "deepspeed": 1,
-        "distserve": (1, 1, 1, 1)   # (context_tp, context_pp, decoding_tp, decoding_pp)
+        "distserve": (1, 1, 1, 1),   # (context_tp, context_pp, decoding_tp, decoding_pp)
+        "distserve-mps": (1, 1, 1, 1)
     },
     "facebook/opt-13b": {
         "vllm": 1,
@@ -39,6 +40,12 @@ MODEL_TO_PARALLEL_PARAMS = {
         "vllm": 8,
         "deepspeed": 8,
         "distserve": (3, 3, 4, 3)
+    },
+    "huggyllama/llama-7b": {
+        "vllm": 2,
+        "deepspeed": 2,
+        "distserve": (1, 1, 1, 1),
+        "distserve-mps": (2, 1, 2, 1)
     },
 }
 
@@ -87,12 +94,14 @@ python -m mii.entrypoints.api_server \\
     elif args.backend == "distserve":
         context_tp, context_pp, decoding_tp, decoding_pp = MODEL_TO_PARALLEL_PARAMS[args.model]["distserve"]
         script = f"""
+source ~/.bashrc
 conda activate distserve;
 python -m distserve.api_server.distserve_api_server \\
     --host 0.0.0.0 \\
     --port {port} \\
     --model {args.model} \\
     --tokenizer {args.model} \\
+    {f"--worker-num-gpus {args.worker_num_gpus}" if args.worker_num_gpus is not None else ""} \\
     {"--use-dummy-weights" if use_dummy_weight else ""} \\
     \\
     --context-tensor-parallel-size {context_tp} \\
@@ -102,8 +111,8 @@ python -m distserve.api_server.distserve_api_server \\
     \\
     --block-size 16 \\
     --max-num-blocks-per-req 128 \\
-    --gpu-memory-utilization 0.95 \\
-    --swap-space 16 \\
+    --gpu-memory-utilization 0.35 \\
+    --swap-space 4  \\
     \\
     --context-sched-policy fcfs \\
     --context-max-batch-size 128 \\
@@ -114,8 +123,40 @@ python -m distserve.api_server.distserve_api_server \\
     --decoding-max-tokens-per-batch 65536
 """
     
+    elif args.backend == "distserve-mps":
+        context_tp, context_pp, decoding_tp, decoding_pp = MODEL_TO_PARALLEL_PARAMS[args.model]["distserve-mps"]
+        script = f"""
+source ~/.bashrc
+conda activate distserve;
+python -m distserve.api_server.distserve_api_server \\
+    --host 0.0.0.0 \\
+    --port {port} \\
+    --model {args.model} \\
+    --tokenizer {args.model} \\
+    --mps-percentage {args.mps_percentage} \\
+    --gpu-memory-utilization 0.35 \\
+    {f"--worker-num-gpus {args.worker_num_gpus}" if args.worker_num_gpus is not None else ""} \\
+    {"--use-dummy-weights" if use_dummy_weight else ""} \\
+    \\
+    --context-tensor-parallel-size {context_tp} \\
+    --context-pipeline-parallel-size {context_pp} \\
+    --decoding-tensor-parallel-size {decoding_tp} \\
+    --decoding-pipeline-parallel-size {decoding_pp} \\
+    \\
+    --block-size 16 \\
+    --max-num-blocks-per-req 128 \\
+    --swap-space 4 \\
+    \\
+    --context-sched-policy fcfs \\
+    --context-max-batch-size 128 \\
+    --context-max-tokens-per-batch 8192 \\
+    \\
+    --decoding-sched-policy fcfs \\
+    --decoding-max-batch-size 1024 \\
+    --decoding-max-tokens-per-batch 65536
+"""
     print(f"Starting server with command {script}")
-    subprocess.run(["fish", "-c", script])
+    subprocess.run(["bash", "-c", script])
 
 
 def metadata_server_process(port, args: argparse.Namespace):
@@ -169,6 +210,9 @@ if __name__ == "__main__":
         required=True,
         help="The model to be served"
     )
+    parser.add_argument("--mps-percentage", type=float, default=0.8)
+    parser.add_argument("--worker-num-gpus", type=float, default=None)
+    
     
     args = parser.parse_args()
     main(args)

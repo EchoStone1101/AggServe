@@ -24,9 +24,11 @@ def sample_requests(dataset_path: str, num_prompts: int) -> List[TestRequest]:
     """
     dataset = Dataset.load(dataset_path)
     if num_prompts > len(dataset.reqs):
-        raise ValueError(
-            f"Number of prompts ({num_prompts}) is larger than the dataset size ({len(dataset.reqs)})."
-        )
+        # raise ValueError(
+        #     f"Number of prompts ({num_prompts}) is larger than the dataset size ({len(dataset.reqs)})."
+        # )
+        print(f"Number of prompts ({num_prompts}) is larger than the dataset size ({len(dataset.reqs)}).")
+        return (dataset.reqs * (num_prompts // len(dataset.reqs) + 1)) [:num_prompts]
     return random.sample(dataset.reqs, num_prompts)
 
 
@@ -124,7 +126,7 @@ async def send_request(
         )
     else:
         headers = {"User-Agent": "Benchmark Client"}
-        if backend == "distserve" or backend == "vllm":
+        if backend == "distserve" or backend == "vllm" or backend == "distserve-mps":
             pload = {
                 "prompt": prompt,
                 "n": 1,
@@ -225,6 +227,11 @@ def main(args: argparse.Namespace):
     input_requests = sample_requests(
         args.dataset, args.num_prompts
     )
+    
+    print(f"Aver input length: {sum([req.prompt_len for req in input_requests]) / len(input_requests)}")
+    print(f"Aver output length: {sum([req.output_len for req in input_requests]) / len(input_requests)}")
+    print(f"Aver output length: {sum([req.output_len + req.prompt_len for req in input_requests]) / len(input_requests)}")
+    
     print("Sampling done. Start benchmarking...")
 
     global pbar
@@ -253,6 +260,9 @@ def main(args: argparse.Namespace):
     print(f"\t{sum([req.prompt_len + req.output_len for req in input_requests]) / benchmark_time:.2f} tokens/s")
     print(f"\t{sum([req.output_len for req in input_requests]) / benchmark_time:.2f} output tokens/s")
 
+    request_results = {"results": request_results, "Throughput": {"request/s": args.num_prompts / benchmark_time, 
+                                                    "tokens/s": sum([req.prompt_len + req.output_len for req in input_requests]) / benchmark_time, 
+                                                    "output tokens/s": sum([req.output_len for req in input_requests])}}
     with open(args.output, "w") as f:
         json.dump(request_results, f, default=vars)
 
@@ -261,7 +271,7 @@ if __name__ == "__main__":
         description="Benchmark the online serving throughput."
     )
     parser.add_argument(
-        "--backend", type=str, default="distserve", choices=["distserve", "vllm", "deepspeed"]
+        "--backend", type=str, default="distserve", choices=["distserve", "vllm", "deepspeed", "distserve-mps"]
     )
     parser.add_argument("--host", type=str, default="localhost")
     parser.add_argument("--port", type=int, default=None)

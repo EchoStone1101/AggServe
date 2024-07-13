@@ -12,12 +12,11 @@ import os
 parser = argparse.ArgumentParser()
 # MODEL = "/users/xyx/.cache/huggingface/hub/models--huggyllama--llama-7b/snapshots/8416d3fefb0cb3ff5775a7b13c1692d10ff1aa16/"
 MODEL = "facebook/opt-125m"
+# MODEL = "huggyllama/llama-7b"
+# MODEL = "/users/xyx/.cache/huggingface/hub/models--facebook--opt-125m/snapshots/27dcfa74d334bc871f3234de431e71c6eeba5dd6"
 parser.add_argument('--model', type=str, help='The model to use', default=MODEL)
 args = parser.parse_args()
 
-mps_dir = './mps'
-os.environ["CUDA_MPS_PIPE_DIRECTORY"] = f"{mps_dir}/nvidia-mps"
-os.environ["CUDA_MPS_LOG_DIRECTORY"] = f"{mps_dir}/nvidia-log"
 # Sample prompts.
 prompts = [
     "Life blooms like a flower. Far away or by the road. Waiting",

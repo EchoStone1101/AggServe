@@ -24,7 +24,7 @@ from distserve.utils import Counter, cudaMemoryIpcHandle, Stage
 from distserve.lifetime import LifetimeEvent, LifetimeEventType
 from distserve.tokenizer import get_tokenizer
 from distserve.block_manager import BlockManager
-from distserve.worker import ParaWorker
+from distserve.worker import *#ParaWorker, MPSParaWorker
 from distserve.context_stage_scheduler import ContextStageSchedConfig, ContextStageScheduler, get_context_stage_scheduler
 from distserve.decoding_stage_scheduler import DecodingStageSchedConfig, DecodingStageScheduler, get_decoding_stage_scheduler
 
@@ -147,7 +147,6 @@ class SingleStageLLMEngine(ABC):
         each worker will be assigned a GPU
         the worker will be placed in the corresponding placement group
         """
-        logger.info("Initializing workers")
 
         layer_per_placement_group = self.model_config.get_num_layers() // len(self.placement_groups)
         layer_per_pp = self.model_config.get_num_layers(self.parallel_config)
@@ -156,19 +155,30 @@ class SingleStageLLMEngine(ABC):
         pp_id = copy.deepcopy(torch.ops.nccl_ops.generate_nccl_id())
         
         init_handlers = []
+        worker_class = MPSParaWorker if self.parallel_config.mps_percentage else ParaWorker
+        
+        # worker_class = DecodeParaWorker if self.stage == Stage.DECODING else ContextParaWorker
         for i in range(self.parallel_config.pipeline_parallel_size):
             workers = []
             placement_group_index = i // pp_per_placement_group
             tp_id = copy.deepcopy(torch.ops.nccl_ops.generate_nccl_id())
+            
             cur_placement_group = self.placement_groups[placement_group_index]
             for j in range(self.parallel_config.tensor_parallel_size):
                 tmp_parallel_config = copy.deepcopy(self.parallel_config)
                 tmp_parallel_config.pipeline_parallel_rank = i
                 tmp_parallel_config.tensor_parallel_rank = j
-                worker = ParaWorker.options(
+                
+                logger.info(f"Initializing workers: pp {i} tp {j}")#, pp_id {pp_id}, tp_id {tp_id}")
+                logger.info(f"placement group {placement_group_index}: {cur_placement_group}, bundle index {(i * 2 + j * 2 + (1 if self.stage == Stage.DECODING else 0)) if self.parallel_config.mps_percentage else -1}")
+                
+                num_gpus = self.parallel_config.worker_num_gpus if self.parallel_config.worker_num_gpus is not None else 1.0
+                worker = worker_class.options(
                     scheduling_strategy=PlacementGroupSchedulingStrategy(
-                        placement_group=cur_placement_group
-                    )
+                        placement_group=cur_placement_group,
+                        placement_group_bundle_index=(i * 2 + j * 2 + (1 if self.stage == Stage.DECODING else 0)) if self.parallel_config.mps_percentage else -1
+                    ),
+                    num_gpus=num_gpus,
                 ).remote(
                     worker_id=(i*self.parallel_config.tensor_parallel_size+j),
                     stage=self.stage,
@@ -198,7 +208,8 @@ class SingleStageLLMEngine(ABC):
         logger.info("Profiling available blocks")
         num_gpu_blocks, num_cpu_blocks = await self.workers[0][0]._profile_num_available_blocks.remote(
             self.cache_config.block_size,
-            self.cache_config.gpu_memory_utilization,
+            # self.cache_config.gpu_memory_utilization,
+            0.95 - self.cache_config.gpu_memory_utilization if self.stage == Stage.DECODING and "self.parallel_config.mps_percentage is not None" else self.cache_config.gpu_memory_utilization, #TODO share kvcache
             self.cache_config.cpu_swap_space,
         )
             
