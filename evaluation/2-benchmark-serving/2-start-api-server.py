@@ -24,7 +24,7 @@ MODEL_TO_PARALLEL_PARAMS = {
         "vllm": 1,
         "deepspeed": 1,
         "distserve": (1, 1, 1, 1),   # (context_tp, context_pp, decoding_tp, decoding_pp)
-        "distserve-mps": (1, 1, 1, 1)
+        "distserve-mps": (2, 1, 2, 1)
     },
     "facebook/opt-13b": {
         "vllm": 1,
@@ -111,7 +111,7 @@ python -m distserve.api_server.distserve_api_server \\
     \\
     --block-size 16 \\
     --max-num-blocks-per-req 128 \\
-    --gpu-memory-utilization 0.35 \\
+    --gpu-memory-utilization 0.95 \\
     --swap-space 4  \\
     \\
     --context-sched-policy fcfs \\
@@ -134,7 +134,7 @@ python -m distserve.api_server.distserve_api_server \\
     --model {args.model} \\
     --tokenizer {args.model} \\
     --mps-percentage {args.mps_percentage} \\
-    --gpu-memory-utilization 0.35 \\
+    --gpu-memory-utilization 0.25 \\
     {f"--worker-num-gpus {args.worker_num_gpus}" if args.worker_num_gpus is not None else ""} \\
     {"--use-dummy-weights" if use_dummy_weight else ""} \\
     \\
@@ -145,10 +145,10 @@ python -m distserve.api_server.distserve_api_server \\
     \\
     --block-size 16 \\
     --max-num-blocks-per-req 128 \\
-    --swap-space 4 \\
+    --swap-space 16 \\
     \\
     --context-sched-policy fcfs \\
-    --context-max-batch-size 128 \\
+    --context-max-batch-size 4 \\
     --context-max-tokens-per-batch 8192 \\
     \\
     --decoding-sched-policy fcfs \\

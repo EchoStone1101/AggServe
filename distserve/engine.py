@@ -116,7 +116,7 @@ class LLMEngine:
         logger.info(disagg_parallel_config.decoding.mps_percentage)
         if self.disagg_parallel_config.context.mps_percentage is not None and self.disagg_parallel_config.decoding.mps_percentage is not None:
             logger.info(f"init mps: context phase {disagg_parallel_config.context.mps_percentage}, decode phase {disagg_parallel_config.decoding.mps_percentage}")
-            mps_dir = '/users/xyx/AggServe/exp/'
+            mps_dir = '/opt/tiger/AggServe/exp/mps'
             os.environ["CUDA_MPS_PIPE_DIRECTORY"] = f"{mps_dir}/nvidia-mps"
             os.environ["CUDA_MPS_LOG_DIRECTORY"] = f"{mps_dir}/nvidia-log"
             os.environ["CUDA_MPS_ENABLE_PER_CTX_DEVICE_MULTIPROCESSOR_PARTITIONING"] = "1"

@@ -209,7 +209,7 @@ class SingleStageLLMEngine(ABC):
         num_gpu_blocks, num_cpu_blocks = await self.workers[0][0]._profile_num_available_blocks.remote(
             self.cache_config.block_size,
             # self.cache_config.gpu_memory_utilization,
-            0.95 - self.cache_config.gpu_memory_utilization if self.stage == Stage.DECODING and "self.parallel_config.mps_percentage is not None" else self.cache_config.gpu_memory_utilization, #TODO share kvcache
+            0.95 - self.cache_config.gpu_memory_utilization if self.stage == Stage.DECODING and self.parallel_config.mps_percentage is not None else self.cache_config.gpu_memory_utilization, #TODO share kvcache
             self.cache_config.cpu_swap_space,
         )
             

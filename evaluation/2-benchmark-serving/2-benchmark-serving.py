@@ -28,6 +28,9 @@ def sample_requests(dataset_path: str, num_prompts: int) -> List[TestRequest]:
         #     f"Number of prompts ({num_prompts}) is larger than the dataset size ({len(dataset.reqs)})."
         # )
         print(f"Number of prompts ({num_prompts}) is larger than the dataset size ({len(dataset.reqs)}).")
+        for req in dataset.reqs:
+            req.output_len = 64
+            print(req)
         return (dataset.reqs * (num_prompts // len(dataset.reqs) + 1)) [:num_prompts]
     return random.sample(dataset.reqs, num_prompts)
 
